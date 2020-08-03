@@ -12,6 +12,7 @@ import com.google.android.exoplayer2.source.MediaSource
 import com.google.android.exoplayer2.upstream.DefaultDataSourceFactory
 import com.google.android.exoplayer2.util.Util.getUserAgent
 
+
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -19,27 +20,31 @@ import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 import io.flutter.plugin.common.PluginRegistry.Registrar
 import java.lang.RuntimeException
+import com.google.android.exoplayer2.PlaybackParameters
 
 abstract class OcarinaPlayer {
   protected var volume: Double;
   protected var loop: Boolean;
   protected var context: Context;
   protected val url: String;
+  protected var speed: Double;
   protected lateinit var player: SimpleExoPlayer;
   protected lateinit var mediaSource: MediaSource;
+  protected var params = PlaybackParameters(1.0f, 1.0f, false);
 
-  constructor(url: String, volume: Double, loop: Boolean, context: Context) {
+  constructor(url: String, volume: Double, loop: Boolean, context: Context, speed: Double) {
     this.url = url;
     this.volume = volume;
     this.loop = loop;
     this.context = context;
+    this.speed = speed;
   }
 
   // trying to track https://github.com/erickzanardo/ocarina/issues/4
   private fun checkInitialized() {
-      if (!this::player.isInitialized) {
-        throw RuntimeException("Player is not initialized");
-      }
+    if (!this::player.isInitialized) {
+      throw RuntimeException("Player is not initialized");
+    }
     if (!this::mediaSource.isInitialized) {
       throw RuntimeException("MediaSource is not initialized");
     }
@@ -55,6 +60,7 @@ abstract class OcarinaPlayer {
     if (player.playbackState == Player.STATE_ENDED)
       player.seekTo(0);
     else if(player.playbackState == Player.STATE_IDLE)
+
       player.prepare(mediaSource);
 
     player.playWhenReady = true;
@@ -98,15 +104,28 @@ abstract class OcarinaPlayer {
     checkInitialized();
     this.volume = volume;
     player.volume = volume.toFloat();
+
+    player.playWhenReady = true;
+  }
+
+  fun speed(speed: Double) {
+    checkInitialized();
+    this.speed = speed;
+
+    // params can be set for speed, pitch, and ignore silence
+    params = PlaybackParameters(speed.toFloat(), speed.toFloat(), false);
+    player.setPlaybackParameters(params)
+
+    player.playWhenReady = true;
   }
 
   abstract fun extractMediaSourceFromUri(uri: String): MediaSource;
 }
 
-class AssetOcarinaPlayer(url: String, volume: Double, loop: Boolean, context: Context) : OcarinaPlayer(url, volume, loop, context) {
+class AssetOcarinaPlayer(url: String, volume: Double, loop: Boolean, context: Context, speed: Double) : OcarinaPlayer(url, volume, loop, context, speed) {
   private lateinit var flutterAssets: FlutterPlugin.FlutterAssets;
 
-  constructor(url: String, volume: Double, loop: Boolean, context: Context, flutterAssets: FlutterPlugin.FlutterAssets): this(url, volume, loop, context) {
+  constructor(url: String, volume: Double, loop: Boolean, context: Context, flutterAssets: FlutterPlugin.FlutterAssets, speed: Double): this(url, volume, loop, context, speed) {
     this.flutterAssets = flutterAssets;
   }
 
@@ -127,7 +146,7 @@ class AssetOcarinaPlayer(url: String, volume: Double, loop: Boolean, context: Co
   }
 }
 
-class FileOcarinaPlayer(url: String, volume: Double, loop: Boolean, context: Context) : OcarinaPlayer(url, volume, loop, context) {
+class FileOcarinaPlayer(url: String, volume: Double, loop: Boolean, context: Context, speed: Double) : OcarinaPlayer(url, volume, loop, context, speed) {
 
   override fun extractMediaSourceFromUri(uri: String): MediaSource {
     val userAgent = getUserAgent(context, "ocarina");
@@ -169,11 +188,12 @@ public class OcarinaPlugin: FlutterPlugin, MethodCallHandler {
       val volume = call.argument<Double>("volume");
       val loop = call.argument<Boolean>("loop");
       val isAsset = call.argument<Boolean>("isAsset");
+      val speed = call.argument<Double>("speed");
 
       var player: OcarinaPlayer = if (isAsset!!) {
-        AssetOcarinaPlayer(url!!, volume!!, loop!!, context, flutterAssets);
+        AssetOcarinaPlayer(url!!, volume!!, loop!!, context, flutterAssets, speed!!);
       } else {
-        FileOcarinaPlayer(url!!, volume!!, loop!!, context);
+        FileOcarinaPlayer(url!!, volume!!, loop!!, context, speed!!);
       }
       player.load();
 
@@ -225,6 +245,14 @@ public class OcarinaPlugin: FlutterPlugin, MethodCallHandler {
       val player = players[playerId!!];
       player!!.dispose();
       players.remove(playerId!!);
+
+      result.success(0);
+
+    } else if (call.method == "speed") {
+      val playerId = call.argument<Int>("playerId");
+      val speed = call.argument<Double>("speed");
+      val player = players[playerId!!];
+      player!!.speed(speed!!);
 
       result.success(0);
     } else {

@@ -1,3 +1,10 @@
+/*
+* Notes:  - speed exists in the constructor and has mechanics to be changed
+*           within the application, but it needs to be assigned to parameters
+*           each time the value changes as well as on construction
+*
+* */
+
 import 'dart:async';
 
 import 'package:flutter/services.dart';
@@ -9,6 +16,7 @@ class OcarinaPlayer {
   int _id;
   double volume;
   final bool loop;
+  double speed;
 
   String asset;
   String filePath;
@@ -18,11 +26,12 @@ class OcarinaPlayer {
     this.filePath,
     this.volume = 1.0,
     this.loop = false,
+    this.speed = 1.0,
   }) {
     assert(
-        (asset != null && filePath == null) ||
-            (asset == null && filePath != null),
-        'You need to specify an assert, OR filePath, not both, or neither');
+    (asset != null && filePath == null) ||
+        (asset == null && filePath != null),
+    'You need to specify an assert, OR filePath, not both, or neither');
   }
 
   /// Loads your asset or file, no other operation can be performed on this instance before this is called
@@ -32,6 +41,7 @@ class OcarinaPlayer {
       'volume': volume,
       'loop': loop,
       'isAsset': asset != null,
+      'speed': speed,
     });
   }
 
@@ -64,6 +74,12 @@ class OcarinaPlayer {
   Future<void> updateVolume(double volume) async {
     _ensureLoaded();
     await _channel.invokeMethod('volume', {'playerId': _id, 'volume': volume});
+  }
+
+
+  Future<void> updateSpeed(double speed) async {
+    _ensureLoaded();
+    await _channel.invokeMethod('speed', {'playerId': _id, 'speed': speed});
   }
 
   void _ensureLoaded() {
